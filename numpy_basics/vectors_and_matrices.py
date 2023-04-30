@@ -127,5 +127,27 @@ def indexing_and_slicing():
     print("\nlast few elements of the last rows: ", c[2:, 2:])
 
 
-indexing_and_slicing()
+def broadcasting():
+    a = np.arange(5)
+    c = np.arange(5)[::-1]
+    x = np.arange(25).reshape((5, 5))
+    y = np.arange(30).reshape((5, 6))
 
+    print("a: ", a)
+
+    print("\na * PI: ", a*3.14)
+
+    print("\na * a: ", a * a)
+    
+    print("\na * c: ", a * c) #since a and c are the same size, they can be multiplied (rule for vectors)
+
+    #Rule for matrices: To multiply, the number of columns in the first matrix must be equal to the number of rows in the second matrix
+    print("\na * x: (a(1x5) x(5x5)): ", a * x)
+
+    #Also used for the dot product
+    print("\na dot a: ", np.dot(a, a)) #returns a scalar
+
+    #Dot product for two matrices
+    print("\nx dot y: ", np.dot(x, y))
+broadcasting()
+    
