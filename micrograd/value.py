@@ -20,6 +20,10 @@ class Value:
     #We need to use the __ naming mehtod to define these operators within the class
 
     def __add__(self, other):
+        #The expression below reads if other is an instance of Value, we leave it alone
+        #but if other is not as instance of value, we will make it an instance of value
+        #This way we can simply add integers and wahtnot without explicity having to make them instances of the Value class
+        other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other), '+')
 
         #This function is for backpropogation
@@ -38,6 +42,11 @@ class Value:
             other.grad += self.data * out.grad
         out._backward = _backward
         return out
+    
+    #This method is for multiplting a number to an instance of Value when they are reversed (2 * a instead of a * 2) 
+    #because Python cannot recognize it 
+    def __rmul__(self, other): 
+        return self * other
     
     def tanh(self):
         x = self.data
@@ -90,42 +99,6 @@ x1w1x2w2 = x1w1 + x2w2; x1w1x2w2.label = 'x1*w1 + x2*w2'
 
 n = x1w1x2w2 + b; n.label = 'n' #neuron
 o = n.tanh(); o.label = 'o' #output
-
-def trace(root):
-    nodes, edges = set(), set()
-    def build(v):
-        if v not in nodes:
-            nodes.add(v)
-            for child in v._prev:
-                edges.add((child, v))
-                build(child)
-    build(root)
-    return nodes, edges
-
-def draw_dot(root, format='svg', rankdir='LR'):
-    """
-    format: png | svg | ...
-    rankdir: TB (top to bottom graph) | LR (left to right)
-    """
-    assert rankdir in ['LR', 'TB']
-    nodes, edges = trace(root)
-    dot = Digraph(format=format, graph_attr={'rankdir': rankdir}) #, node_attr={'rankdir': 'TB'})
-    
-    for n in nodes:
-        dot.node(name=str(id(n)), label = "{ data %.4f | grad %.4f }" % (n.data, n.grad), shape='record')
-        if n._op:
-            dot.node(name=str(id(n)) + n._op, label=n._op)
-            dot.edge(str(id(n)) + n._op, str(id(n)))
-    
-    for n1, n2 in edges:
-        dot.edge(str(id(n1)), str(id(n2)) + n2._op)
-    
-    return dot
-
-o.backward() #Use the backward function to do backpropogation automatically
-dot = draw_dot(o)
-dot.view()
-    
 
 def example():
     #For example
