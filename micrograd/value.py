@@ -32,8 +32,8 @@ class Value:
         #This function is for backpropogation
         def _backward(): 
             #These are ways you compute the gradient of each step : If the output is added, then you take the local derivative with respect to the final output... which would be 1
-            self.grad += 1.0 * out.grad #we need to accumulate these gradients according to the multivariate case of the chain rule (if we use a variable more than once)
-            other.grad += 1.0 * out.grad
+            self.grad += out.grad #we need to accumulate these gradients according to the multivariate case of the chain rule (if we use a variable more than once)
+            other.grad += out.grad
         out._backward = _backward
         return out
     
@@ -43,10 +43,7 @@ class Value:
     def __sub__(self, other): #self - other
         return self + (-other)
     
-    def __sub__(self, other): #self - other
-        return self + (-other)
-    
-    def __rsub(self, other):
+    def __rsub__(self, other): #other - self
         return other + (-self)
     
     def __neg__(self): #-self
@@ -72,7 +69,7 @@ class Value:
         out = Value(self.data ** other, (self, ), f'**{other}')
 
         def _backward():
-            self.grad += other * (self.data ** (other - 1)) * out.grad
+            self.grad += (other * self.data ** (other - 1)) * out.grad
         out._backward = _backward
 
         return out
@@ -89,7 +86,7 @@ class Value:
         out = Value(t, (self, ), 'tanh')
 
         def _backward():
-            self.grad += (1 - t**2) * 2 #Combination of derivative for tanh and chain rule
+            self.grad += (1 - t**2) * out.grad #Combination of derivative for tanh and chain rule
         out._backward = _backward
         return out
     def exp(self):
@@ -101,6 +98,7 @@ class Value:
 
         out._backward = _backward
         return out
+    
     def backward(self):
         
         #To not have to manually call ._backward for each pass, we will use a topological sort
@@ -112,16 +110,18 @@ class Value:
             if v not in visited:
                 visited.add(v)
 
-            for child in v._prev:
-                build_topo(child)
-            topo.append(v)
+                for child in v._prev:
+                    build_topo(child)
+
+                topo.append(v)
 
         build_topo(self)
 
-        self.grad = 1.0 #set the gradient to 1.0 (since by default it is 0)
+        self.grad = 1 #set the gradient to 1 (since by default it is 0)
 
         for node in reversed(topo):
             node._backward()
+
 def manual_define():   
     #inputs x1, x2
     x1 = Value(2.0, label='x1')
@@ -200,7 +200,7 @@ class Neuron:
         act = sum((wi*xi for wi, xi in zip(self.w, x)), self.b) + self.b #zip will iterate over the tuples of the parameteres : This means that it will pair up the w and x 
         out = act.tanh()
         return out
-    
+
     def parameters(self):
         return self.w + [self.b]
 
@@ -212,14 +212,14 @@ class Layer:
     def __call__(self, x):
         outs = [n(x) for n in self.neurons]
         return outs[0] if len(outs) == 1 else outs
-    
+
     def parameters(self):
         params = []
         for neuron in self.neurons:
             np = neuron.parameters() #parameters of the neuron
             params.extend(np)
         return params
-    
+
 class MLP: #Multi Layered Perceptron
 
     def __init__(self, nin, nouts): #nouts is now a list, meaning it is the sizes of all of the layers in our MLP
@@ -230,7 +230,7 @@ class MLP: #Multi Layered Perceptron
         for layer in self.layers:
             x = layer(x)
         return x
-    
+
     def parameters(self):
         params = []
         for layer in self.layers:
@@ -255,10 +255,10 @@ def MLPExample():
     print(n(x))
 
 
-
-def loss():
-    
+def lossExample():
+    x = [2.0, 3.0, -1.0]
     n = MLP(3, [4, 4, 1]) #3 inputs into two layers of 4 and 1 output
+    n(x)
     
     #Multiple input datas                    
     xs = [
@@ -271,11 +271,6 @@ def loss():
     ys = [1.0, -1.0, -1.0, 1.0] #This is the desired output for each of the inputs
     ypred = [n(x) for x in xs]
 
-    
-
-    #ypred = [x[0].data for x in ypred] #extracting the values from the ypred list
-
-    print('ys: ', ys)
     print('ypred: ', ypred)
 
     #Mean Squared Error Loss
@@ -284,26 +279,15 @@ def loss():
     #You only get 0 when the ground truth and prediction are equal to each other
     #The more off we are from the target, the greater the loss
     loss = sum((yout - ygt)**2 for ygt, yout in zip(ys, ypred)) #This is the total loss
-    print(loss)
+    print('loss: ', loss)
 
     #Now we need to minimize the loss so that each of the predicitons is close to its target
 
     loss.backward()
 
-    print("Before\n-----")
-    print(n.layers[0].neurons[0].w[0].grad)
-    print(n.layers[0].neurons[0].w[0].data)
-
-loss()    
-def parametersExample():
-    x = [2.0, 3.0, -1.0] #3 inputs
-    n = MLP(3, [4, 4, 1])
     print(n.parameters()) #All of the weights and biases inside of the neural network
-    print(len(n.parameters()))
+    print(len(n.parameters())) #Number of parameters in the neural network
 
-
-    x = [2.0, 3.0, -1.0] #3 inputs
-    n = MLP(3, [4, 4, 1])
 
     #look at the data before we do gradient descent
     print("Before\n-----")
@@ -317,7 +301,42 @@ def parametersExample():
 
     #look at the data after gradient descent
     print("After\n-----")
-    print(n.layers[0].neurons[0].w[0].grad)
     print(n.layers[0].neurons[0].w[0].data)
+def train():
+    x = [2.0, 3.0, -1.0]
+    n = MLP(3, [4, 4, 1]) 
+    n(x)
+
+    xs = [
+        [2.0, 3.0, -1.0],
+        [3.0, -1.0, 0.5],
+        [0.5, 1.0, 1.0],
+        [1.0, 1.0, -1.0],
+    ]
+
+    ys = [1.0, -1.0, -1.0, 1.0]
+
+    #Gradient descent
+    #Breaking it up into steps :: This shows the predictions getting closer and closer to their target values
+
+    for k in range(20):
+        #forward pass
+        ypred = [n(x) for x in xs]
+        loss = sum((yout - ygt)**2 for ygt, yout in zip(ys, ypred))
+
+        #backward pass
+        for p in n.parameters():
+            p.grad = 0.0 #Set the grads to zero so they dont accumulate 
+        loss.backward()
+
+        #update
+        for p in n.parameters():
+            p.data += -0.05 * p.grad
+
+        print(k, loss.data)
+    print(ypred)
+train()
+
+
 
 
