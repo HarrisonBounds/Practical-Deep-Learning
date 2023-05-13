@@ -1,5 +1,5 @@
 from graphviz import Digraph
-import value
+import driver
 
 def trace(root):
     nodes, edges = set(), set()
@@ -32,6 +32,6 @@ def draw_dot(root, format='svg', rankdir='LR'):
     
     return dot
 
-value.o.backward() #Use the backward function to do backpropogation automatically
-dot = draw_dot(value.o)
+driver.o.backward() #Use the backward function to do backpropogation automatically
+dot = draw_dot(driver.o)
 dot.view()
