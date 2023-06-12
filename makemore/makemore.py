@@ -21,19 +21,26 @@ for w in words:
         N[ix1, ix2] += 1 #Counting the occurence of each bigram and reflecting that in the array
 
 
+#Create a matrix that has the probabilities of the bigrams already caluclated so we do not have to do it in the for loop below
+P = (N+1).float() #Getting the float values of N : Adding to N to smooth our model. Some bigrams are 0% likely, which if seen in a testing set will make our loss infinity
+P /= P.sum(1, keepdim=True) #If we pass in the dimension and set keepdim = True, we can sum up the separate rows in our overall matrix : See broadcasting semantics to see why this operation is possible
+
+#When we normalize across the rows, we expect P[0].sum() to always be 1
+
 #+++++++++++++++++++ Name Sampling +++++++++++++++++++#
 #We are 'training' this model using bigrams
 
 g = torch.Generator().manual_seed(2147483647) #Use a generator so we can get the same random numbers every time
 
-for i in range(50): #Looping multiple times to get sample multiple names
+for i in range(5): #Looping multiple times to get sample multiple names
     out = []
     ix = 0 #Set our index to zero so we can get a starting letter (start token .)
 
     while True:
         #Training
-        p = N[ix].float() #Store the row of the index we are currently on
-        p = p / p.sum() #Normalize the data so it is in between 0 and 1
+        p = P[ix]
+        # p = N[ix].float() #Store the row of the index we are currently on
+        # p = p / p.sum() #Normalize the data so it is in between 0 and 1
         
         #We use multinomial to generate a tensor of integers based on probability : Storing in ix will tell us which index will be next
         ix = torch.multinomial(p, num_samples=1, replacement=True, generator=g).item() #Example : if the 0th element in the tensor is 0.60, then the tensor should be made up of ~60% 0s
@@ -43,6 +50,42 @@ for i in range(50): #Looping multiple times to get sample multiple names
             break
     
     print(''.join(out))
+
+def view_model_quality():
+    #GOAL: Maximize likelihood (product of the probablities) of the data
+    #Equivalent to maximizing the log likelihood (This is just scaling)
+    #Equivalent to minimizing the negative log likelihood
+    #Equivalent to minimizing the average negative log likelihood
+
+
+
+
+    #To measure the quality of our model as one number, we can take the product of all of the probabilities in the training set
+    #Instead, we will use the log likelihood for convenience
+    #log(a*b*c) = log(a) + log(b) + log(c)
+
+    log_likelihood = 0.0
+    n = 0 #variable for normalization
+    for w in ['harrison']: #Looking at the probability of the bigrams in my name : be careful, if you test aname with a bigram that has probability = 0, you will get a bug
+        chs = ['.'] + list(w) + ['.'] 
+        for ch1, ch2 in zip(chs, chs[1:]): 
+            ix1 = stoi[ch1] 
+            ix2 = stoi[ch2]
+            prob = P[ix1, ix2] #Looks up the probability of the bigram according to the matrix P 
+            logprob = torch.log(prob) #Gets the log probability (all of the log products summed together)
+            log_likelihood += logprob #Accumulates the log probabilities
+            n += 1
+            print(f'{ch1}{ch2}: {prob:.4f}: {logprob:.4f}')
+
+    print(f'{log_likelihood=}') #When all of the probabilities are 1, log_likelihood will be zero. When the proabilities are lower, this number grows more and more negative
+    nll = -log_likelihood
+    print(f'{nll=}') #This is a nice loss function because the lowest this can get is 0, and the worse off the probabilities, the higher the number
+    print(f'{nll/n}') #Average log likelihood (This can be our loss function). Therefore, the qualioty of our model is this output
+
+view_model_quality()    
+
+
+
 
 
 def plot():
