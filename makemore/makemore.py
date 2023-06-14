@@ -2,6 +2,7 @@
 #Bigram - A piar of consecutive characters/words
 
 import torch
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 words = open('Practical-Deep-Learning/makemore/names.txt', 'r').read().splitlines() #Puts each name in the text file into a list of words
@@ -27,29 +28,93 @@ P /= P.sum(1, keepdim=True) #If we pass in the dimension and set keepdim = True,
 
 #When we normalize across the rows, we expect P[0].sum() to always be 1
 
+def single_layer():
+    # Create the training set of bigrams
+    xs, ys = [], []
+    for w in words[:1]: #Only looking at the first words : We have 5 inputs into the nn
+        chs = ['.'] + list(w) + ['.'] 
+        for ch1, ch2 in zip(chs, chs[1:]): 
+            ix1 = stoi[ch1] 
+            ix2 = stoi[ch2]
+            xs.append(ix1)
+            ys.append(ix2)
+
+         
+    #xs are the input to the nn, ys are the label
+    xs = torch.tensor(xs) #Creating tensors for the input and output of the nn : xs and ys are the index of the characters. Example: a=1, b=2, .=0
+    ys = torch.tensor(ys) 
+
+    g = torch.Generator().manual_seed(2147483647)
+    W = torch.randn((27, 27), generator=g) #Randomnly initialize 27 neurons weights : Each neuron receives 27 inputs 
+
+    #Forward pass
+    xenc = F.one_hot(xs, num_classes=27).float() #input to nn using one-hot encoding : need to cast to float to have easier tweaked values
+    logits = (xenc @ W) #predict log-counts : @ is a matrix multiplication operator : (5, 27) @ (27, 27) ===> output (5, 27) : This represents the 5 activations on 27 neuron based on the weighted inputs
+    counts = logits.exp() #Equivalent to N : We exponentiate this output so we can utilize it when looking at probability : This is the output for the one layer nn
+    probs = counts / counts.sum(1, keepdims=True) #Normalize the probabilities : Every rows will now sum to 1 : shape is (5, 27)
+
+    #The 2 lines above are called a softmax : Softmax is a way to take an output from a nn and covert it into probabilities
+    
+    #.e is the first input in our nn : Having the probs gives us the probability of each character coming next, sinces there are 27 indexes in each row
+    def view_data():
+        print('xs: ', xs)
+        print('ys: ', ys) 
+
+        print('xenc: ', xenc) 
+
+        print('logits: ', logits)
+        print('counts: ', counts)
+        print('probs: ', probs)
+
+    def example():
+        nlls = torch.zeros(5)
+
+        for i in range(5):
+            #i-th bigram
+            x = xs[i].item()
+            y = ys[i].item()
+            print('------------------')
+            print(f'Bigram example {i+1}: {itos[x]}{itos[y]} (indexes {x}, {y})')
+            print('INput to the neural net: ', probs[i])
+            print('label (actual next character): ', y)
+            p = probs[i, y]
+            print('Probability assigned by the net to the correct character: ', p.item())
+            logp = torch.log(p)
+            print('Log likelihood: ', logp.item())
+            nll = -logp
+            print('Negative log likelihood: ', nll.item())
+            nlls[i] = nll
+
+        print('=================')
+        print('Average Negative log likelihood, i.e. loss = ', nlls.mean().item())
+
+    example()
+
+single_layer()
+
 #+++++++++++++++++++ Name Sampling +++++++++++++++++++#
 #We are 'training' this model using bigrams
+def name_sample():
+    g = torch.Generator().manual_seed(2147483647) #Use a generator so we can get the same random numbers every time
 
-g = torch.Generator().manual_seed(2147483647) #Use a generator so we can get the same random numbers every time
+    for i in range(5): #Looping multiple times to get sample multiple names
+        out = []
+        ix = 0 #Set our index to zero so we can get a starting letter (start token .)
 
-for i in range(5): #Looping multiple times to get sample multiple names
-    out = []
-    ix = 0 #Set our index to zero so we can get a starting letter (start token .)
+        while True:
+            #Training
+            p = P[ix]
+            # p = N[ix].float() #Store the row of the index we are currently on
+            # p = p / p.sum() #Normalize the data so it is in between 0 and 1
+            
+            #We use multinomial to generate a tensor of integers based on probability : Storing in ix will tell us which index will be next
+            ix = torch.multinomial(p, num_samples=1, replacement=True, generator=g).item() #Example : if the 0th element in the tensor is 0.60, then the tensor should be made up of ~60% 0s
 
-    while True:
-        #Training
-        p = P[ix]
-        # p = N[ix].float() #Store the row of the index we are currently on
-        # p = p / p.sum() #Normalize the data so it is in between 0 and 1
+            out.append(itos[ix])
+            if ix == 0: #This means we have hit the end token (.)
+                break
         
-        #We use multinomial to generate a tensor of integers based on probability : Storing in ix will tell us which index will be next
-        ix = torch.multinomial(p, num_samples=1, replacement=True, generator=g).item() #Example : if the 0th element in the tensor is 0.60, then the tensor should be made up of ~60% 0s
-
-        out.append(itos[ix])
-        if ix == 0: #This means we have hit the end token (.)
-            break
-    
-    print(''.join(out))
+        print(''.join(out))
 
 def view_model_quality():
     #GOAL: Maximize likelihood (product of the probablities) of the data
@@ -81,11 +146,6 @@ def view_model_quality():
     nll = -log_likelihood
     print(f'{nll=}') #This is a nice loss function because the lowest this can get is 0, and the worse off the probabilities, the higher the number
     print(f'{nll/n}') #Average log likelihood (This can be our loss function). Therefore, the qualioty of our model is this output
-
-view_model_quality()    
-
-
-
 
 
 def plot():
