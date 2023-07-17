@@ -24,7 +24,6 @@ for w in words:
 
 #+++++++++++++++++++ Name Sampling +++++++++++++++++++#
 #We are 'training' this model using bigrams
-
 g = torch.Generator().manual_seed(2147483647) #Use a generator so we can get the same random numbers every time
 
 for i in range(50): #Looping multiple times to get sample multiple names
@@ -70,8 +69,9 @@ def summary():#Use the name 'emma' as an example
     print('ys: ', ys)
 
     #Randomly initialze the 27 neurons weights
+    g = torch.Generator().manual_seed(2147483647)
     W = torch.randn((27, 27), generator=g, requires_grad=True) #Each neuron has 27 inputs
-    for k in range(10):
+    for k in range(500):
         #Forward pass : All of these layers make it easy for us to backpropogate through
         xenc =F.one_hot(xs, num_classes=27).float() #input to the nn using one hot encoding
         logits = xenc @ W #predict log-counts : multiply and add the x encodings by the weights
