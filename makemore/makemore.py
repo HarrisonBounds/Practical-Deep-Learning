@@ -89,7 +89,7 @@ def summary():#Use the name 'emma' as an example
         print(f'Output probability: {probs[i]}')
         print(f'Label (next character): {itos[y]} | index: {y}')
         p = probs[i, y]
-        print(f'Probability assigned by the NN to the next correct character: {p.item()}')
+        print(f'Probability assigned by the NN to the correct character: {p.item()}')
         logp = torch.log(p)
         print(f'log likelihood: {logp.item()}')
         nll = -logp
