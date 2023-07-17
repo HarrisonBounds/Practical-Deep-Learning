@@ -68,36 +68,48 @@ def summary():#Use the name 'emma' as an example
     print('ys: ', ys)
 
     #Randomly initialze the 27 neurons weights
-    W = torch.randn((27, 27), generator=g) #Each neuron has 27 inputs
+    W = torch.randn((27, 27), generator=g, requires_grad=True) #Each neuron has 27 inputs
+    for k in range(10):
+        #Forward pass : All of these layers make it easy for us to backpropogate through
+        xenc =F.one_hot(xs, num_classes=27).float() #input to the nn using one hot encoding
+        logits = xenc @ W #predict log-counts : multiply and add the x encodings by the weights
+        #Softmax : Take ouputs of a nn and outputs probability distributions
+        counts = logits.exp() #equivalent to N
+        probs = counts / counts.sum(1, keepdims=True) #normalizing distribution : probabilities for next character
 
-    #Forward pass : All of these layers make it easy for us to backpropogate through
-    xenc =F.one_hot(xs, num_classes=27).float() #input to the nn using one hot encoding
-    logits = xenc @ W #predict log-counts : multiply and add the x encodings by the weights
-    #Softmax : Take ouputs of a nn and outputs probability distributions
-    counts = logits.exp() #equivalent to N
-    probs = counts / counts.sum(1, keepdims=True) #normalizing distribution : probabilities for next character
+        #=====Optimize NN======#
+        #Retrieve the loss for the NN : Negative log likelihood
+        loss = -probs[torch.arange(5), ys].log().mean()
+        print("Loss: ", loss.item())
+
+        #Backward pass
+        W.grad = None #Way to set gradients to zero
+        loss.backward()
+
+        #Update the weights
+        W.data += -0.1 * W.grad #No loop becasue all we have is one tensor
 
     nlls = torch.zeros(5)
+    def run_through():
+        for i in range(5):
+            #i-th bigram
+            x = xs[i].item() #input character index
+            y = ys[i].item() #label for x
+            print("============")
+            print(f'Bigram example {i+1} | {itos[x]}{itos[y]} | (indexes: {x}, {y})')
+            print(f'Input to the NN: {itos[x]} | index: {x}')
+            print(f'Output probability: {probs[i]}')
+            print(f'Label (next character): {itos[y]} | index: {y}')
+            p = probs[i, y]
+            print(f'Probability assigned by the NN to the correct character: {p.item()}')
+            logp = torch.log(p)
+            print(f'log likelihood: {logp.item()}')
+            nll = -logp
+            print(f'negative log likelihood: {nll}')
+            nlls[i] = nll
+            print("============")
 
-    for i in range(5):
-        #i-th bigram
-        x = xs[i].item() #input character index
-        y = ys[i].item() #label for x
-        print("============")
-        print(f'Bigram example {i+1} | {itos[x]}{itos[y]} | (indexes: {x}, {y})')
-        print(f'Input to the NN: {itos[x]} | index: {x}')
-        print(f'Output probability: {probs[i]}')
-        print(f'Label (next character): {itos[y]} | index: {y}')
-        p = probs[i, y]
-        print(f'Probability assigned by the NN to the correct character: {p.item()}')
-        logp = torch.log(p)
-        print(f'log likelihood: {logp.item()}')
-        nll = -logp
-        print(f'negative log likelihood: {nll}')
-        nlls[i] = nll
-        print("============")
-
-        print(f'Loss/ average negative log likelihood {nlls.mean().item()}')
+            print(f'Loss/ average negative log likelihood {nlls.mean().item()}')
 
 
 summary()    
