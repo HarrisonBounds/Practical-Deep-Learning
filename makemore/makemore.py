@@ -51,18 +51,20 @@ def summary():#Use the name 'emma' as an example
     xs, ys = [], [] #Input data and labels for the input data (what character comes next)
 
     #Take the first word as an example
-    for w in words[:1]:
+    for w in words:
         chs = ['.'] + list(w) + ['.'] #Construct the beginning and end tokens
         for ch1, ch2 in zip(chs, chs[1:]): #Organize the bigrams to get their index
             ix1 = stoi[ch1]
             ix2 = stoi[ch2]
-            print(ch1, ch2)
             #Use the indexes as input and label data
             xs.append(ix1)
             ys.append(ix2)
 
     xs = torch.tensor(xs)
     ys = torch.tensor(ys)
+    num_examples = xs.nelement()
+
+    print("Number of examples: ", num_examples)
 
     print('xs: ', xs)
     print('ys: ', ys)
@@ -79,7 +81,7 @@ def summary():#Use the name 'emma' as an example
 
         #=====Optimize NN======#
         #Retrieve the loss for the NN : Negative log likelihood
-        loss = -probs[torch.arange(5), ys].log().mean()
+        loss = -probs[torch.arange(num_examples), ys].log().mean()
         print("Loss: ", loss.item())
 
         #Backward pass
