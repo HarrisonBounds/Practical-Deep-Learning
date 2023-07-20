@@ -14,37 +14,76 @@ stoi = {s:i+1 for i, s in enumerate(chars)} #mapping each character to an intege
 stoi['.'] = 0 #Instead of having two tokens, we will just use one (Make this position 0 and offset the other characters)
 itos = {i:s for s, i in stoi.items()} #Reverse of stoi
 
-for w in words:
-    chs = ['.'] + list(w) + ['.'] #Pairs the starting and ending characters with a token
+g = torch.Generator().manual_seed(2147483647) #Use a generator so we can get the same random numbers every time
+
+def plot():
+    plt.figure(figsize=(10, 10))
+    plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95)
+
+    font_size = 8
+    plt.imshow(N, cmap='Blues')
+
+    for i in range(27):
+        for j in range(27):
+            chstr = itos[i] + itos[j]
+            plt.text(j, i, chstr, ha="center", va="bottom", color='gray', fontsize=font_size)
+            plt.text(j, i, N[i, j].item(), ha="center", va="top", color='gray', fontsize=font_size)
+
+    plt.axis('off')
+    plt.show()
+
+#Name Sampling#
+#We are 'training' this model using bigrams
+def bigram_name_sampling():
+
+    for w in words:
+        chs = ['.'] + list(w) + ['.'] #Pairs the starting and ending characters with a token
     for ch1, ch2 in zip(chs, chs[1:]): #Iterates through the bigrams
         ix1 = stoi[ch1] #Storing the bigrams
         ix2 = stoi[ch2]
         N[ix1, ix2] += 1 #Counting the occurence of each bigram and reflecting that in the array
 
+    for i in range(50): #Looping multiple times to get sample multiple names
+        out = []
+        ix = 0 #Set our index to zero so we can get a starting letter (start token .)
 
-#+++++++++++++++++++ Name Sampling +++++++++++++++++++#
-#We are 'training' this model using bigrams
-g = torch.Generator().manual_seed(2147483647) #Use a generator so we can get the same random numbers every time
+        while True:
+            #Training
+            p = N[ix].float() #Store the row of the index we are currently on
+            p = p / p.sum() #Normalize the data so it is in between 0 and 1
+            
+            #We use multinomial to generate a tensor of integers based on probability : Storing in ix will tell us which index will be next
+            ix = torch.multinomial(p, num_samples=1, replacement=True, generator=g).item() #Example : if the 0th element in the tensor is 0.60, then the tensor should be made up of ~60% 0s
 
-for i in range(50): #Looping multiple times to get sample multiple names
-    out = []
-    ix = 0 #Set our index to zero so we can get a starting letter (start token .)
+            out.append(itos[ix])
+            if ix == 0: #This means we have hit the end token (.)
+                break
+    def data_view():
+        print("==============================================")
+        print("VIEWING THE DATA")
+        print("==============================================")
+        for w in words[:1]:
+            print("w as a list = ", list(w))
+            chs = ['<S>'] + list(w) + ['<E>']
+            for ch1, ch2 in zip(chs, chs[1:]):
+                print(ch1, ch2) #Prints the bigram
 
-    while True:
-        #Training
-        p = N[ix].float() #Store the row of the index we are currently on
-        p = p / p.sum() #Normalize the data so it is in between 0 and 1
-        
-        #We use multinomial to generate a tensor of integers based on probability : Storing in ix will tell us which index will be next
-        ix = torch.multinomial(p, num_samples=1, replacement=True, generator=g).item() #Example : if the 0th element in the tensor is 0.60, then the tensor should be made up of ~60% 0s
+        chars = sorted(list(set(''.join(words))))
+        print('chars = ', chars)
 
-        out.append(itos[ix])
-        if ix == 0: #This means we have hit the end token (.)
-            break
-    
-    print(''.join(out))
+        stoi = {s:i for i, s in enumerate(chars)}
+        print('stoi = ', stoi)
 
-def summary():#Use the name 'emma' as an example
+        itos = {i:s for s, i in stoi.items()}
+        print('itos = ', itos)
+
+        print("First Row = ", N[0])
+
+        print('p = ', p)
+
+        print("Multinomial Funtion = ", torch.multinomial(p, num_samples=100, replacement=True, generator=g))
+
+def bigram_model():#Use the name 'emma' as an example 
 
     #Create a training set of bigrams
     xs, ys = [], [] #Input data and labels for the input data (what character comes next)
@@ -114,49 +153,53 @@ def summary():#Use the name 'emma' as an example
             print(f'Loss/ average negative log likelihood {nlls.mean().item()}')
 
 
-summary()    
+def MLP_dataset():
+    #building the dataset
 
+    block_size = 3 #How many characters will we look at before to predict the next one : context length
+    X, Y = [], [] #inputs and labels
 
-def plot():
-    plt.figure(figsize=(10, 10))
-    plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95)
+    for w in words[:5]:
+        print(w)
+        context = [0] * block_size #current running list of letters
 
-    font_size = 8
-    plt.imshow(N, cmap='Blues')
+        for ch in w + '.':
+            ix = stoi[ch]
+            X.append(context)
+            Y.append(ix)
+            print(''.join(itos[i] for i in context), '------>', itos[ix])
+            context = context[1:] + [ix]
 
-    for i in range(27):
-        for j in range(27):
-            chstr = itos[i] + itos[j]
-            plt.text(j, i, chstr, ha="center", va="bottom", color='gray', fontsize=font_size)
-            plt.text(j, i, N[i, j].item(), ha="center", va="top", color='gray', fontsize=font_size)
+    #Creating an embedding look up table
+    C = torch.randn((27, 2))
 
-    plt.axis('off')
-    plt.show()
+    #NOTE: 
+    # F.one_hot(5, num_classes=27) #Encoding the integer 5 : Outputs a tensor that is all zeros, except the 5th index which is 1
+    # Multiplying the one hot encoding by C will give you the same result as C[5]
 
-def data_view():
-    print("==============================================")
-    print("VIEWING THE DATA")
-    print("==============================================")
-    for w in words[:1]:
-        print("w as a list = ", list(w))
-        chs = ['<S>'] + list(w) + ['<E>']
-        for ch1, ch2 in zip(chs, chs[1:]):
-            print(ch1, ch2) #Prints the bigram
+    emb = C[X] #Embedding of our input
 
-    chars = sorted(list(set(''.join(words))))
-    print('chars = ', chars)
+    W1 = torch.randn((6, 100)) #Initializing the weights for our first layer : 6 inputs (3x2) and 100 neurons
+    b1 = torch.randn(100) #Initializing the biases of the first layer
 
-    stoi = {s:i for i, s in enumerate(chars)}
-    print('stoi = ', stoi)
+    #Chagne the tensors dimensions so we can multiply
+    #Use .view to change the internals of the tensor and keep the same storage properties : -1 is used for pytorch to interpret the appropiate size
+    h = torch.tanh(emb.view(-1, 6) @ W1 + b1) #h is the hidden layer of activations
 
-    itos = {i:s for s, i in stoi.items()}
-    print('itos = ', itos)
+    #Create the second layer
+    W2 = torch.randn((100, 27))
+    b2 = torch.randn(27)
 
-    print("First Row = ", N[0])
+    logits = h @ W2 + b2 #logits are the output of this NN
+    #softmax
+    counts = logits.exp()
+    prob = counts / counts.sum(1, keepdims=True)
 
-    print('p = ', p)
+    #Getting the loss
+    loss = -prob[torch.arange(32), Y].log().mean() #Comparing with the labels to see the probability of predicting the next character 
 
-    print("Multinomial Funtion = ", torch.multinomial(p, num_samples=100, replacement=True, generator=g))
+    
+MLP_dataset()
 
 
 
