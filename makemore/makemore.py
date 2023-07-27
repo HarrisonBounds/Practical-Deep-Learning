@@ -195,7 +195,7 @@ def MLP_dataset():
     counts = logits.exp()
     prob = counts / counts.sum(1, keepdims=True)
 
-    #Getting the loss
+    #Getting the loss : Negative log likelihood 
     loss = -prob[torch.arange(32), Y].log().mean() #Comparing with the labels to see the probability of predicting the next character 
 
     
