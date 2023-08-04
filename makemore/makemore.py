@@ -4,6 +4,7 @@
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import random
 
 words = open('makemore/names.txt', 'r').read().splitlines() #Puts each name in the text file into a list of words
 
@@ -155,36 +156,51 @@ def bigram_model():#Use the name 'emma' as an example
 
 def MLP_dataset():
     #building the dataset
+    def build_dataset(words):
+        block_size = 3 #How many characters will we look at before to predict the next one : context length
+        X, Y = [], [] #inputs and labels
 
-    block_size = 3 #How many characters will we look at before to predict the next one : context length
-    X, Y = [], [] #inputs and labels
+        for w in words:
+            #print(w)
+            context = [0] * block_size #current running list of letters
 
-    for w in words:
-        #print(w)
-        context = [0] * block_size #current running list of letters
+            for ch in w + '.':
+                ix = stoi[ch]
+                X.append(context)
+                Y.append(ix)
+                #print(''.join(itos[i] for i in context), '------>', itos[ix])
+                context = context[1:] + [ix]
+        #converting the lists into tensors for future calculations
+        X = torch.tensor(X)
+        Y = torch.tensor(Y)
+        #print(X.shape, Y.shape)
+        return X, Y
 
-        for ch in w + '.':
-            ix = stoi[ch]
-            X.append(context)
-            Y.append(ix)
-            #print(''.join(itos[i] for i in context), '------>', itos[ix])
-            context = context[1:] + [ix]
-    #converting the lists into tensors for future calculations
-    X = torch.tensor(X)
-    Y = torch.tensor(Y)
+    #Splitting the dataset : training - 80%, validation - 10%, testing - 10%
+    random.seed(42)
+    random.shuffle(words) #shuffling the words in random order
+
+    n1 = int(0.8*len(words)) #80% of the words
+    n2 = int(0.9*len(words)) #90% of the words
+
+    Xtrain, Ytrain = build_dataset(words[:n1]) #training
+    Xvalidate, Yvalidate = build_dataset(words[n1:n2]) #validation/dev
+    Xtest, Ytest = build_dataset(words[n2:]) #testing
 
     #NOTE: 
     # F.one_hot(5, num_classes=27) #Encoding the integer 5 : Outputs a tensor that is all zeros, except the 5th index which is 1
     # Multiplying the one hot encoding by C will give you the same result as C[5]
 
     #Creating an embedding look up table
-    C = torch.randn((27, 2), generator=g)
-    W1 = torch.randn((6, 100), generator=g) #Initializing the weights for our first layer : 6 inputs (3x2) and 100 neurons
-    b1 = torch.randn(100, generator=g) #Initializing the biases of the first layer
+    C = torch.randn((27, 15), generator=g)
+    W1 = torch.randn((45, 200), generator=g) #Initializing the weights for our first layer : 6 inputs (3x2) and 100 neurons
+    b1 = torch.randn(200, generator=g) #Initializing the biases of the first layer
     #Create the second layer
-    W2 = torch.randn((100, 27), generator=g)
+    W2 = torch.randn((200, 27), generator=g)
     b2 = torch.randn(27, generator=g)
     parameters = [C, W1, b1, W2, b2]
+
+    print("Number of parameters: ", sum(p.nelement() for p in parameters)) #total number of parameters
 
     for p in parameters:
         p.requires_grad = True
@@ -197,17 +213,17 @@ def MLP_dataset():
     lri = []
     lossi = []
 
-    for _ in range(10000):
+    for i in range(500000):
 
         #constructing the mini batch
-        ix = torch.randint(0, X.shape[0], (32,)) #generate a tensor with numbers between 0 and the shape of x so we can use the integers to index into the dataset
+        ix = torch.randint(0, Xtrain.shape[0], (64,)) #generate a tensor with numbers between 0 and the shape of x so we can use the integers to index into the dataset
 
         #Forward Pass
-        emb = C[X[ix]] #Embedding of our input 
+        emb = C[Xtrain[ix]] #Embedding of our input 
 
         #Change the tensors dimensions so we can multiply
         #Use .view to change the internals of the tensor and keep the same storage properties : -1 is used for pytorch to interpret the appropiate size
-        h = torch.tanh(emb.view(-1, 6) @ W1 + b1) #h is the hidden layer of activations
+        h = torch.tanh(emb.view(-1, 45) @ W1 + b1) #h is the hidden layer of activations
 
         logits = h @ W2 + b2 #logits are the output of this NN
         #softmax
@@ -219,7 +235,7 @@ def MLP_dataset():
 
         #Witht the cross entropy function, the forward and backward pass are much more efficient, and everything is more numerically well behaved
 
-        loss = F.cross_entropy(logits, Y[ix]) #This calculates the loss using pytorch
+        loss = F.cross_entropy(logits, Ytrain[ix]) #This calculates the loss using pytorch
 
         #print(loss.item())
 
@@ -230,19 +246,56 @@ def MLP_dataset():
 
         # lr = lrs[i]
 
-        #update
+        #update : learning rate decay
+        if i < 50000:
+            lr = 0.1
+        elif i > 50000 and i < 100000:
+            lr = 0.05
+        else:
+            lr = 0.01
+
         for p in parameters:
-            p.data += -0.1 * p.grad #learning rate x gradient
+            p.data += -lr * p.grad #learning rate x gradient
 
         # #track stats
         # lri.append(lre[i])
         # lossi.append(loss.item())
 
-    print(loss.item())
-
     # plt.plot(lri, lossi)
     # plt.show()
 
+    #evaluate the network
+    emb = C[Xtrain] 
+    h = torch.tanh(emb.view(-1, 45) @ W1 + b1)
+    logits = h @ W2 + b2
+    loss = F.cross_entropy(logits, Ytrain)
+    print("Training loss: ", loss.item())
+
+    emb = C[Xvalidate] 
+    h = torch.tanh(emb.view(-1, 45) @ W1 + b1)
+    logits = h @ W2 + b2
+    loss = F.cross_entropy(logits, Yvalidate)
+    print("Validation loss: ", loss.item())
+
+    def sample():
+        block_size = 3
+        for _ in range(20):
+            out = []
+            context = [0] * block_size
+
+            while True:
+                emb = C[torch.tensor([context])]
+                h = torch.tanh(emb.view(1, -1) @ W1 + b1)
+                logits = h @ W2 + b2
+                probs = F.softmax(logits, dim=1)
+                ix = torch.multinomial(probs, num_samples=1).item()
+                context = context[1:] + [ix]
+                out.append(ix)
+                if ix == 0:
+                    break
+                print(''.join(itos[i] for i in out))
+
+    sample()
     
 MLP_dataset()
 
