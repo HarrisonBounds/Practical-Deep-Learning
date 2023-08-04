@@ -159,44 +159,89 @@ def MLP_dataset():
     block_size = 3 #How many characters will we look at before to predict the next one : context length
     X, Y = [], [] #inputs and labels
 
-    for w in words[:5]:
-        print(w)
+    for w in words:
+        #print(w)
         context = [0] * block_size #current running list of letters
 
         for ch in w + '.':
             ix = stoi[ch]
             X.append(context)
             Y.append(ix)
-            print(''.join(itos[i] for i in context), '------>', itos[ix])
+            #print(''.join(itos[i] for i in context), '------>', itos[ix])
             context = context[1:] + [ix]
-
-    #Creating an embedding look up table
-    C = torch.randn((27, 2))
+    #converting the lists into tensors for future calculations
+    X = torch.tensor(X)
+    Y = torch.tensor(Y)
 
     #NOTE: 
     # F.one_hot(5, num_classes=27) #Encoding the integer 5 : Outputs a tensor that is all zeros, except the 5th index which is 1
     # Multiplying the one hot encoding by C will give you the same result as C[5]
 
-    emb = C[X] #Embedding of our input
-
-    W1 = torch.randn((6, 100)) #Initializing the weights for our first layer : 6 inputs (3x2) and 100 neurons
-    b1 = torch.randn(100) #Initializing the biases of the first layer
-
-    #Chagne the tensors dimensions so we can multiply
-    #Use .view to change the internals of the tensor and keep the same storage properties : -1 is used for pytorch to interpret the appropiate size
-    h = torch.tanh(emb.view(-1, 6) @ W1 + b1) #h is the hidden layer of activations
-
+    #Creating an embedding look up table
+    C = torch.randn((27, 2), generator=g)
+    W1 = torch.randn((6, 100), generator=g) #Initializing the weights for our first layer : 6 inputs (3x2) and 100 neurons
+    b1 = torch.randn(100, generator=g) #Initializing the biases of the first layer
     #Create the second layer
-    W2 = torch.randn((100, 27))
-    b2 = torch.randn(27)
+    W2 = torch.randn((100, 27), generator=g)
+    b2 = torch.randn(27, generator=g)
+    parameters = [C, W1, b1, W2, b2]
 
-    logits = h @ W2 + b2 #logits are the output of this NN
-    #softmax
-    counts = logits.exp()
-    prob = counts / counts.sum(1, keepdims=True)
+    for p in parameters:
+        p.requires_grad = True
 
-    #Getting the loss : Negative log likelihood 
-    loss = -prob[torch.arange(32), Y].log().mean() #Comparing with the labels to see the probability of predicting the next character 
+    #creating learning rates between 0.001 and 1 (exponentially stepped)
+    lre = torch.linspace(-3, 0, 1000) 
+    lrs = 10**lre #stepping through the exponents : 10^-3 = 0.001, 10^0 = 1
+
+    #keep track of the learning rates we used and the losses that resulted from them
+    lri = []
+    lossi = []
+
+    for _ in range(10000):
+
+        #constructing the mini batch
+        ix = torch.randint(0, X.shape[0], (32,)) #generate a tensor with numbers between 0 and the shape of x so we can use the integers to index into the dataset
+
+        #Forward Pass
+        emb = C[X[ix]] #Embedding of our input 
+
+        #Change the tensors dimensions so we can multiply
+        #Use .view to change the internals of the tensor and keep the same storage properties : -1 is used for pytorch to interpret the appropiate size
+        h = torch.tanh(emb.view(-1, 6) @ W1 + b1) #h is the hidden layer of activations
+
+        logits = h @ W2 + b2 #logits are the output of this NN
+        #softmax
+        # counts = logits.exp()
+        # prob = counts / counts.sum(1, keepdims=True)
+
+        #Getting the loss : Negative log likelihood 
+        #loss = -prob[torch.arange(32), Y].log().mean() #Comparing with the labels to see the probability of predicting the next character 
+
+        #Witht the cross entropy function, the forward and backward pass are much more efficient, and everything is more numerically well behaved
+
+        loss = F.cross_entropy(logits, Y[ix]) #This calculates the loss using pytorch
+
+        #print(loss.item())
+
+        #Backward pass
+        for p in parameters:
+            p.grad = None
+        loss.backward()
+
+        # lr = lrs[i]
+
+        #update
+        for p in parameters:
+            p.data += -0.1 * p.grad #learning rate x gradient
+
+        # #track stats
+        # lri.append(lre[i])
+        # lossi.append(loss.item())
+
+    print(loss.item())
+
+    # plt.plot(lri, lossi)
+    # plt.show()
 
     
 MLP_dataset()
